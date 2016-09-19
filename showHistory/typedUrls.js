@@ -123,6 +123,12 @@ document.addEventListener('DOMContentLoaded', function () {
       'maxResults': 1000
     },
     function(historyItems) {
+      historyItems.filter((val, index, array) => {
+        //url has to exist
+        val.url
+      }).map((val, index, array) => {
+        val.url // => this is the value we want to 
+      });
       console.log(historyItems);
     });
 });
