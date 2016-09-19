@@ -116,4 +116,13 @@ function buildTypedUrlList(divName) {
 
 document.addEventListener('DOMContentLoaded', function () {
   buildTypedUrlList("typedUrl_div");
+
+  chrome.history.search({
+      'text': '',              // Return every history item....
+      'startTime': 0,
+      'maxResults': 1000
+    },
+    function(historyItems) {
+      console.log(historyItems);
+    });
 });
