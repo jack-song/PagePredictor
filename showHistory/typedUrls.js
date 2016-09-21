@@ -123,12 +123,20 @@ document.addEventListener('DOMContentLoaded', function () {
       'maxResults': 1000
     },
     function(historyItems) {
-      historyItems.filter((val, index, array) => {
+      var mappedHistory = historyItems.filter((val, index, array) => {
         //url has to exist
-        val.url
+        return val.url != "" || val.url != null;
       }).map((val, index, array) => {
-        val.url // => this is the value we want to 
+        // Example: In http://stackoverflow.com/questions/12345, this matches stackoverflow.com
+        var urlExpression = /([^www\.\/][0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/g;
+        var regex = new RegExp(urlExpression);
+        var trimUrl = val.url.match(regex);
+        if (trimUrl != null && trimUrl.length > 0) {
+          return trimUrl[0];
+        }
+        return "";
       });
       console.log(historyItems);
+      console.log(mappedHistory);
     });
 });
