@@ -117,26 +117,57 @@ function buildTypedUrlList(divName) {
 document.addEventListener('DOMContentLoaded', function () {
   buildTypedUrlList("typedUrl_div");
 
+  // Example: In http://stackoverflow.com/questions/12345, this matches stackoverflow.com
+  var urlExpression = /([^www\.\/][0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/g;
+  var URL_REGEX = new RegExp(urlExpression);
+
   chrome.history.search({
       'text': '',              // Return every history item....
       'startTime': 0,
-      'maxResults': 1000
+      'maxResults': 3000      // how many results can get on average?...
     },
     function(historyItems) {
       var mappedHistory = historyItems.filter((val, index, array) => {
         //url has to exist
-        return val.url != "" || val.url != null;
+        return val.url != null && val.url != "";
       }).map((val, index, array) => {
-        // Example: In http://stackoverflow.com/questions/12345, this matches stackoverflow.com
-        var urlExpression = /([^www\.\/][0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/g;
-        var regex = new RegExp(urlExpression);
-        var trimUrl = val.url.match(regex);
+        var trimUrl = val.url.match(URL_REGEX);
         if (trimUrl != null && trimUrl.length > 0) {
           return trimUrl[0];
         }
         return "";
       });
-      console.log(historyItems);
+
       console.log(mappedHistory);
+
+      // testing trial - later generate from top 15 (?) possible output sites and 31 (?) possible input sites
+      var trainingArray = [
+        {
+          input: [1,0,0],
+          output: [0,1,0]
+        },
+        {
+          input: [0,1,0],
+          output: [0,0,1]
+        },
+        {
+          input: [0,0,1],
+          output: [1,0,0]
+        }
+      ];
+
+
+      var hal = new synaptic.Architect.LSTM(3,4,4,4,3);
+      //export for fiddling
+      //HAL.activate([1,0,0]) to show training results
+      window.HAL = hal;
+
+      hal.trainer.train(trainingArray, {
+        rate: 2,
+        iterations: 2000,
+        shuffle: false,
+        log: 1000,
+        error: .0005
+      });
     });
 });
