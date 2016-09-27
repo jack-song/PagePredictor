@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       pp.trainer.train(trainingData, {
         rate: 2,
-        iterations: 2,
+        iterations: 1,
         shuffle: false,
         log: 1000,
         error: .0005
