@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', function () {
   chrome.history.search({
       'text': '',              // Return every history item....
       'startTime': 0,
-      'maxResults': 3000      // how many results can get on average?...
+      'maxResults': 5000      // how many results can get on average?...
     },
     function(historyItems) {
       var mappedHistory = historyItems.filter((val, index, array) => {
@@ -138,33 +138,96 @@ document.addEventListener('DOMContentLoaded', function () {
         return "";
       });
 
-      console.log(mappedHistory);
+      var TRACKED = 31;
 
-      // testing trial - later generate from top 15 (?) possible output sites and 31 (?) possible input sites
-      var trainingArray = [
-        {
-          input: [1,0,0],
-          output: [0,1,0]
-        },
-        {
-          input: [0,1,0],
-          output: [0,0,1]
-        },
-        {
-          input: [0,0,1],
-          output: [1,0,0]
+      // use hash to count
+      var counts = {};
+      mappedHistory.forEach(function (val) {
+        if(val in counts) {
+          counts[val].count++;
+        } else {
+          counts[val] = {};
+          counts[val].name = val;
+          counts[val].count = 1;
         }
-      ];
+      });
+
+      // transfer to array to sort (probably improve this)
+      var rankings = [];
+      for(var key in counts) {
+        rankings.push(counts[key]);
+      }
+      for(var i = 0; i < TRACKED; i++) {
+        rankings.sort(function (a, b) {
+            return b.count - a.count;
+        });
+      }
+
+      trackedSites = [];
+      trackedSites.push('OTHER');
+      rankings.slice(0, TRACKED).forEach(function (val) {
+        trackedSites.push(val.name);
+      });
 
 
-      var hal = new synaptic.Architect.LSTM(3,4,4,4,3);
-      //export for fiddling
-      //HAL.activate([1,0,0]) to show training results
-      window.HAL = hal;
+      console.log('rankings:');
+      console.log(rankings);
+      console.log('trackedSites:');
+      console.log(trackedSites);
 
-      hal.trainer.train(trainingArray, {
+      // final map from site to value
+      siteToIndex = {};
+      trackedSites.forEach(function (val, index) {
+        siteToIndex[val] = index;
+      });
+
+      // default 0 for "other" sites
+      function ind(val) {
+        if(val in siteToIndex) {
+          return siteToIndex[val];
+        } else {
+          return 0;
+        }
+      }
+
+      // turn history into training data
+      trainingData = [];
+      mappedHistory.forEach(function(val, index, arr) {
+        if(index+1 < mappedHistory.length) {
+          var input = new Array(TRACKED+1).fill(0);
+          var output = new Array(TRACKED+1).fill(0);
+          input[ind(val)] = 1;
+          output[ind(arr[index+1])] = 1;
+
+          trainingData.push({
+            input: input,
+            output: output
+          });
+        }
+      });
+
+      console.log('trainingData:');
+      console.log(trainingData);
+
+      var pp = new synaptic.Architect.LSTM(TRACKED+1,6,8,8,8,TRACKED+1);
+      // export for fiddling
+      // copy paste for test input
+      // [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]
+      // or
+      // var test = new Array(32).fill(0);
+      // test.fill(0)[8] = 1;
+      window.PPLab = {};
+      window.PPLab.pp = pp;
+      window.PPLab.map = siteToIndex;
+      window.PPLab.test = function (index) {
+        var test = new Array(TRACKED+1).fill(0);
+        test[index] = 1;
+        return PPLab.pp.activate(test);
+      }
+
+      pp.trainer.train(trainingData, {
         rate: 2,
-        iterations: 2000,
+        iterations: 2,
         shuffle: false,
         log: 1000,
         error: .0005
