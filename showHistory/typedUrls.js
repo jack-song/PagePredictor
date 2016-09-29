@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', function () {
   chrome.history.search({
       'text': '',              // Return every history item....
       'startTime': 0,
-      'maxResults': 5000      // how many results can get on average?...
+      'maxResults': 1000      // how many results can get on average?...
     },
     function(historyItems) {
       var mappedHistory = historyItems.filter((val, index, array) => {
@@ -209,13 +209,38 @@ document.addEventListener('DOMContentLoaded', function () {
       console.log('trainingData:');
       console.log(trainingData);
 
-      var pp = new synaptic.Architect.LSTM(TRACKED+1,6,8,8,8,TRACKED+1);
+      var pp;
+      // Persistent storage over sessions (cache)
+      // For testing purposes, delete this by running:
+      // localStorage.removeItem('pagePredictor');
+      var storedPP = localStorage['pagePredictor'];
+      if (storedPP) {
+        pp = synaptic.Network.fromJSON(storedPP); // Retrieve network
+        // PPLab.pp.activate doesn't work given the Network apparently...
+        // TODO: Fix ^ if possible?
+        // TODO: Add new data?
+      } else {
+        pp = new synaptic.Architect.LSTM(TRACKED+1,6,8,8,8,TRACKED+1);
+      
+        pp.trainer.train(trainingData, {
+          rate: 2,
+          iterations: 1,
+          shuffle: false,
+          log: 1000,  
+          error: .0005
+        });
+        console.log("pp");
+        console.log(pp);
+        localStorage['pagePredictor'] = pp.toJSON(); // Stores the network
+      }
+
       // export for fiddling
       // copy paste for test input
       // [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]
       // or
       // var test = new Array(32).fill(0);
       // test.fill(0)[8] = 1;
+
       window.PPLab = {};
       window.PPLab.pp = pp;
       window.PPLab.map = siteToIndex;
@@ -225,12 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return PPLab.pp.activate(test);
       }
 
-      pp.trainer.train(trainingData, {
-        rate: 2,
-        iterations: 1,
-        shuffle: false,
-        log: 1000,
-        error: .0005
-      });
-    });
+      
+    }
+  );
 });
