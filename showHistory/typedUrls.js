@@ -141,6 +141,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return site;
       });
 
+
+      // 1000*60*60 = 3600000 ms in an hour
+      var MS_PER_HOUR = 3600000;
+
       //console.log('History: ');
       //console.log(historyItems);
 
@@ -194,15 +198,15 @@ document.addEventListener('DOMContentLoaded', function () {
         indexToSite[index] = site;
       });
 
-      function getName(index) {
-        if(index in indexToSite) {
-          return indexToSite[index];
-        } else {
-          return " - ";
+      function printTopSites(output) { 
+        function getName(index) {
+          if(index in indexToSite) {
+            return indexToSite[index];
+          } else {
+            return " - ";
+          }
         }
-      }
-
-      function printTopSites(output) {
+        
         // store original indices
         var indexedOutput = [];
         output.forEach(function(val, index) {
@@ -230,8 +234,8 @@ document.addEventListener('DOMContentLoaded', function () {
           // 1000*60*60 = 3600000 ms in an hour
           var elapsed = end-start;
 
-          if(elapsed >= 0 && elapsed <= 3600000) {
-            return elapsed/parseFloat(3600000);
+          if(elapsed >= 0 && elapsed <= MS_PER_HOUR) {
+            return elapsed/parseFloat(MS_PER_HOUR);
           }
 
           // too long ago or invalid
@@ -304,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
           times.forEach(function (time) {
             input[input.length-1] = time;
             console.log(time + ":");
-            printTopSites(PPLab.pp.activate(test));
+            printTopSites(PPLab.pp.activate(input));
           });
         }
 
