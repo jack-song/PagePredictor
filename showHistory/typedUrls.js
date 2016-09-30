@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
   buildTypedUrlList("typedUrl_div");
 
   // Example: In http://stackoverflow.com/questions/12345, this matches stackoverflow.com
-  var urlExpression = /([^www\.\/][0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/g;
+  var urlExpression = /(?:www\.)?([0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/;
   var URL_REGEX = new RegExp(urlExpression);
 
   chrome.history.search({
@@ -134,8 +134,8 @@ document.addEventListener('DOMContentLoaded', function () {
         var site = {};
         var trimUrl = val.url.match(URL_REGEX);
 
-        if (trimUrl != null && trimUrl.length > 0) {
-          site.name = trimUrl[0];
+        if (trimUrl != null && trimUrl.length > 1) {
+          site.name = trimUrl[1];
           site.time = val.lastVisitTime;
         }
         return site;

@@ -3,15 +3,15 @@
  * @param HistoryItem visited
  */
 chrome.history.onVisited.addListener(function trainURL(visited) {
-	var urlExpression = /([^www\.\/][0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/g;
+	var urlExpression = /(?:www\.)?([0-9A-Za-z-\.@:%_\+~#=]+(\.[a-zA-Z]{2,3})+){1}/;
 	var URL_REGEX = new RegExp(urlExpression);
 	var TRACKED = 31;
 
 	var trimUrl = visited.url.match(URL_REGEX);
-	if (trimUrl == null || trimUrl.length == 0) {
+	if (trimUrl == null || trimUrl.length < 2) {
 		return;
 	}
-	var url = trimUrl[0];
+	var url = trimUrl[1];
 
 	// Get the latest site visited before this
 	chrome.history.search({
