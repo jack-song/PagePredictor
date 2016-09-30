@@ -138,6 +138,9 @@ document.addEventListener('DOMContentLoaded', function () {
         return "";
       });
 
+      console.log("mappedHistory");
+      console.log(mappedHistory);
+
       var TRACKED = 31;
 
       // use hash to count
@@ -213,26 +216,30 @@ document.addEventListener('DOMContentLoaded', function () {
       // Persistent storage over sessions (cache)
       // For testing purposes, delete this by running:
       // localStorage.removeItem('pagePredictor');
-      var storedPP = localStorage['pagePredictor'];
-      if (storedPP) {
-        pp = synaptic.Network.fromJSON(storedPP); // Retrieve network
-        // PPLab.pp.activate doesn't work given the Network apparently...
-        // TODO: Fix ^ if possible?
-        // TODO: Add new data?
-      } else {
-        pp = new synaptic.Architect.LSTM(TRACKED+1,6,8,8,8,TRACKED+1);
-      
-        pp.trainer.train(trainingData, {
-          rate: 2,
-          iterations: 1,
-          shuffle: false,
-          log: 1000,  
-          error: .0005
-        });
-        console.log("pp");
-        console.log(pp);
-        localStorage['pagePredictor'] = pp.toJSON(); // Stores the network
-      }
+      chrome.storage.local.get('pagePredictor', function gotPP(ppJSON){
+        if (Object.keys(ppJSON).length === 0) {
+          pp = new synaptic.Architect.LSTM(TRACKED+1,6,8,8,8,TRACKED+1);
+          pp.trainer.train(trainingData, {
+            rate: 2,
+            iterations: 1,
+            shuffle: false,
+            log: 1000,  
+            error: .0005
+          });
+          chrome.storage.local.set({'pagePredictor': JSON.stringify(pp.toJSON())});
+        } else {
+          pp = synaptic.Network.fromJSON(JSON.parse(ppJSON['pagePredictor'])); // Retrieve network
+          window.PPLab = {};
+          window.PPLab.pp = pp;
+          window.PPLab.map = siteToIndex;
+          window.PPLab.test = function (index) {
+            var test = new Array(TRACKED+1).fill(0);
+            test[index] = 1;
+            return PPLab.pp.activate(test);
+          }
+        }
+      });
+        
 
       // export for fiddling
       // copy paste for test input
@@ -241,14 +248,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // var test = new Array(32).fill(0);
       // test.fill(0)[8] = 1;
 
-      window.PPLab = {};
-      window.PPLab.pp = pp;
-      window.PPLab.map = siteToIndex;
-      window.PPLab.test = function (index) {
-        var test = new Array(TRACKED+1).fill(0);
-        test[index] = 1;
-        return PPLab.pp.activate(test);
-      }
+      
 
       
     }
