@@ -124,83 +124,113 @@ document.addEventListener('DOMContentLoaded', function () {
   chrome.history.search({
       'text': '',              // Return every history item....
       'startTime': 0,
-      'maxResults': 1000      // how many results can get on average?...
+      'maxResults': 2000      // adjust...
     },
     function(historyItems) {
       var mappedHistory = historyItems.filter((val, index, array) => {
         //url has to exist
         return val.url != null && val.url != "";
       }).map((val, index, array) => {
+        var site = {};
         var trimUrl = val.url.match(URL_REGEX);
+
         if (trimUrl != null && trimUrl.length > 0) {
-          return trimUrl[0];
+          site.name = trimUrl[0];
+          site.time = val.lastVisitTime;
         }
-        return "";
+        return site;
       });
 
-      console.log("mappedHistory");
-      console.log(mappedHistory);
+      //console.log('History: ');
+      //console.log(historyItems);
 
       var TRACKED = 31;
 
+      // include spot for elapsed time
+      // and "OTHER" websites
+      var INPUT_SIZE = TRACKED+1+1;
+      var OUTPUT_SIZE = TRACKED+1;
+
       // use hash to count
       var counts = {};
-      mappedHistory.forEach(function (val) {
-        if(val in counts) {
-          counts[val].count++;
+      mappedHistory.forEach(function (site) {
+        if(site in counts) {
+          counts[site.name].count++;
         } else {
-          counts[val] = {};
-          counts[val].name = val;
-          counts[val].count = 1;
+          counts[site.name] = {};
+          counts[site.name].name = site.name;
+          counts[site.name].count = 1;
         }
       });
 
       // transfer to array to sort (probably improve this)
-      var rankings = [];
+      var rankedCounts = [];
       for(var key in counts) {
-        rankings.push(counts[key]);
+        rankedCounts.push(counts[key]);
       }
       for(var i = 0; i < TRACKED; i++) {
-        rankings.sort(function (a, b) {
+        rankedCounts.sort(function (a, b) {
             return b.count - a.count;
         });
       }
 
       trackedSites = [];
       trackedSites.push('OTHER');
-      rankings.slice(0, TRACKED).forEach(function (val) {
-        trackedSites.push(val.name);
+      rankedCounts.slice(0, TRACKED).forEach(function (site) {
+        trackedSites.push(site.name);
       });
 
 
-      console.log('rankings:');
-      console.log(rankings);
-      console.log('trackedSites:');
-      console.log(trackedSites);
+      //console.log('rankedCounts:');
+      //console.log(rankedCounts);
+      //console.log('trackedSites:');
+      //console.log(trackedSites);
 
       // final map from site to value
       siteToIndex = {};
-      trackedSites.forEach(function (val, index) {
-        siteToIndex[val] = index;
+      trackedSites.forEach(function (site, index) {
+        siteToIndex[site] = index;
       });
 
-      // default 0 for "other" sites
-      function ind(val) {
-        if(val in siteToIndex) {
-          return siteToIndex[val];
-        } else {
-          return 0;
-        }
-      }
 
       // turn history into training data
+      // recent websites come before older ones
+      // so closer to front of array = OUTPUT
       trainingData = [];
-      mappedHistory.forEach(function(val, index, arr) {
+      mappedHistory.forEach(function(site, index, arr) {
+        function normalizeInterval(start, end) {
+          // 1000*60*60 = 3600000 ms in an hour
+          var elapsed = end-start;
+
+          if(elapsed >= 0 && elapsed <= 3600000) {
+            return elapsed/parseFloat(3600000);
+          }
+
+          // too long ago or invalid
+          return 1;
+        }
+
+        // default 0 for "other" sites
+        function getIndex(siteName) {
+          if(siteName in siteToIndex) {
+            return siteToIndex[siteName];
+          } else {
+            return 0;
+          }
+        }
+
         if(index+1 < mappedHistory.length) {
-          var input = new Array(TRACKED+1).fill(0);
-          var output = new Array(TRACKED+1).fill(0);
-          input[ind(val)] = 1;
-          output[ind(arr[index+1])] = 1;
+          var input = new Array(INPUT_SIZE).fill(0);
+          var output = new Array(OUTPUT_SIZE).fill(0);
+
+          var nextSite = arr[index+1];
+
+          input[getIndex(nextSite.name)] = 1;
+
+          // input the elapsed time since last visit
+          input[input.length-1] = normalizeInterval(nextSite.time, site.time);
+
+          output[getIndex(site.name)] = 1;
 
           trainingData.push({
             input: input,
@@ -209,48 +239,47 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       });
 
-      console.log('trainingData:');
-      console.log(trainingData);
+      //console.log('trainingData:');
+      //console.log(trainingData);
 
       var pp;
       // Persistent storage over sessions (cache)
       // For testing purposes, delete this by running:
       // localStorage.removeItem('pagePredictor');
+      var FORCE_TRAIN = true;
       chrome.storage.local.get('pagePredictor', function gotPP(ppJSON){
-        if (Object.keys(ppJSON).length === 0) {
-          pp = new synaptic.Architect.LSTM(TRACKED+1,6,8,8,8,TRACKED+1);
+
+        if (FORCE_TRAIN || Object.keys(ppJSON).length === 0) {
+          pp = new synaptic.Architect.LSTM(INPUT_SIZE,6,8,6,OUTPUT_SIZE);
+
           pp.trainer.train(trainingData, {
-            rate: 2,
+            rate: 1,
             iterations: 1,
-            shuffle: false,
-            log: 1000,  
-            error: .0005
+            shuffle: false
           });
+
           chrome.storage.local.set({'pagePredictor': JSON.stringify(pp.toJSON())});
         } else {
           pp = synaptic.Network.fromJSON(JSON.parse(ppJSON['pagePredictor'])); // Retrieve network
-          window.PPLab = {};
-          window.PPLab.pp = pp;
-          window.PPLab.map = siteToIndex;
-          window.PPLab.test = function (index) {
-            var test = new Array(TRACKED+1).fill(0);
-            test[index] = 1;
-            return PPLab.pp.activate(test);
-          }
         }
+
+        window.PPLab = {};
+        window.PPLab.pp = pp;
+        window.PPLab.map = siteToIndex;
+        window.PPLab.test = function (index) {
+          var input = new Array(INPUT_SIZE).fill(0);
+          input[index] = 1;
+          // test for different possible time intervals
+          // within a minute, 5 mins, 10 mins, 30, and 1 hour+
+          var times = [parseFloat(0.01), parseFloat(0.08), parseFloat(0.17), parseFloat(0.5), parseFloat(0.1)];
+          times.forEach(function (time) {
+            input[input.length-1] = time;
+            console.log("Time input: " + time);
+            console.log(PPLab.pp.activate(input));
+          });
+        }
+
       });
-        
-
-      // export for fiddling
-      // copy paste for test input
-      // [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]
-      // or
-      // var test = new Array(32).fill(0);
-      // test.fill(0)[8] = 1;
-
-      
-
-      
     }
   );
 });
