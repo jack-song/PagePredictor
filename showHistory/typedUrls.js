@@ -152,46 +152,74 @@ document.addEventListener('DOMContentLoaded', function () {
       var OUTPUT_SIZE = TRACKED+1;
 
       // use hash to count
-      var counts = {};
+      var sites = {};
       mappedHistory.forEach(function (site) {
-        if(site in counts) {
-          counts[site.name].count++;
+        if(site.name in sites) {
+          sites[site.name].count++;
         } else {
-          counts[site.name] = {};
-          counts[site.name].name = site.name;
-          counts[site.name].count = 1;
+          sites[site.name] = {};
+          sites[site.name].name = site.name;
+          sites[site.name].count = 1;
         }
       });
 
       // transfer to array to sort (probably improve this)
-      var rankedCounts = [];
-      for(var key in counts) {
-        rankedCounts.push(counts[key]);
+      var rankedSites = [];
+      for(var mapkey in sites) {
+        rankedSites.push(sites[mapkey]);
       }
-      for(var i = 0; i < TRACKED; i++) {
-        rankedCounts.sort(function (a, b) {
-            return b.count - a.count;
-        });
-      }
+
+      rankedSites.sort(function (a, b) {
+          return b.count - a.count;
+      });
 
       trackedSites = [];
       trackedSites.push('OTHER');
-      rankedCounts.slice(0, TRACKED).forEach(function (site) {
+      rankedSites.slice(0, TRACKED).forEach(function (site) {
         trackedSites.push(site.name);
       });
 
-
-      //console.log('rankedCounts:');
-      //console.log(rankedCounts);
+      // console.log("site counts:");
+      // console.log(sites);
+      // console.log('rankedSites:');
+      // console.log(rankedSites);
       //console.log('trackedSites:');
       //console.log(trackedSites);
 
       // final map from site to value
       siteToIndex = {};
+      indexToSite = {};
       trackedSites.forEach(function (site, index) {
         siteToIndex[site] = index;
+        indexToSite[index] = site;
       });
 
+      function getName(index) {
+        if(index in indexToSite) {
+          return indexToSite[index];
+        } else {
+          return " - ";
+        }
+      }
+
+      function printTopSites(output) {
+        // store original indices
+        var indexedOutput = [];
+        output.forEach(function(val, index) {
+          indexedOutput.push({
+            index: index,
+            value: val
+          });
+        });
+
+        indexedOutput.sort(function (a, b) {
+            return b.value - a.value;
+        });
+
+        for(var i = 0; i < 3; i++) {
+          console.log(getName(indexedOutput[i].index) + ": " + parseFloat(indexedOutput[i].value).toFixed(4));
+        }
+      }
 
       // turn history into training data
       // recent websites come before older ones
@@ -223,12 +251,12 @@ document.addEventListener('DOMContentLoaded', function () {
           var input = new Array(INPUT_SIZE).fill(0);
           var output = new Array(OUTPUT_SIZE).fill(0);
 
-          var nextSite = arr[index+1];
+          var prevSite = arr[index+1];
 
-          input[getIndex(nextSite.name)] = 1;
+          input[getIndex(prevSite.name)] = 1;
 
           // input the elapsed time since last visit
-          input[input.length-1] = normalizeInterval(nextSite.time, site.time);
+          input[input.length-1] = normalizeInterval(prevSite.time, site.time);
 
           output[getIndex(site.name)] = 1;
 
@@ -242,6 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
       //console.log('trainingData:');
       //console.log(trainingData);
 
+      var FORCE_TRAIN = true;
       var pp;
       // Persistent storage over sessions (cache)
       // For testing purposes, delete this by running:
@@ -274,8 +303,8 @@ document.addEventListener('DOMContentLoaded', function () {
           var times = [parseFloat(0.01), parseFloat(0.08), parseFloat(0.17), parseFloat(0.5), parseFloat(0.1)];
           times.forEach(function (time) {
             input[input.length-1] = time;
-            console.log("Time input: " + time);
-            console.log(PPLab.pp.activate(input));
+            console.log(time + ":");
+            printTopSites(PPLab.pp.activate(test));
           });
         }
 
