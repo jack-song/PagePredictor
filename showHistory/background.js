@@ -70,12 +70,11 @@
 })();
 
 function trainFromHistory() {
-  console.log("training network from scratch...");
 
   chrome.history.search({
       'text': '',              // Return every history item....
       'startTime': 0,
-      'maxResults': 2000      // adjust...
+      'maxResults': 3000      // adjust...
     },
     function trainNetwork(historyItems) {
       var mappedHistory = historyItems.filter((val, index, array) => {
@@ -166,22 +165,26 @@ function trainFromHistory() {
         }
       });
 
-      var pp = new synaptic.Architect.LSTM(PPLab.INPUT_SIZE,6,8,6,PPLab.OUTPUT_SIZE);
+      var pp = new synaptic.Architect.LSTM(PPLab.INPUT_SIZE,12,10,8,PPLab.OUTPUT_SIZE);
 
-      pp.trainer.train(trainingData, {
+      console.log("Started training from history...");
+      pp.trainer.trainAsync(trainingData, {
         rate: 1,
         iterations: 1,
         shuffle: false
-      });
-    
-      window.PPLab = window.PPLab || {};
-      PPLab.pp = pp;
-      PPLab.siteToIndex = siteToIndex;
-      PPLab.indexToSite = indexToSite;
+      }).then(results => {
+        console.log("Done training: ");
+        console.log(results);
 
-      chrome.storage.local.set({'pagePredictor': JSON.stringify(PPLab.pp.toJSON())});
-      chrome.storage.local.set({'pagePredictorS2I': PPLab.siteToIndex});
-      chrome.storage.local.set({'pagePredictorI2S': PPLab.indexToSite});
+        window.PPLab = window.PPLab || {};
+        PPLab.pp = pp;
+        PPLab.siteToIndex = siteToIndex;
+        PPLab.indexToSite = indexToSite;
+
+        chrome.storage.local.set({'pagePredictor': JSON.stringify(PPLab.pp.toJSON())});
+        chrome.storage.local.set({'pagePredictorS2I': PPLab.siteToIndex});
+        chrome.storage.local.set({'pagePredictorI2S': PPLab.indexToSite});
+      });
     }
   );
 }
@@ -243,7 +246,7 @@ chrome.runtime.onInstalled.addListener(function(details){
 });
 
 chrome.history.onVisited.addListener(function trainURL(visited) {
-  console.log("VISITED PAGE");
+  //console.log("VISITED PAGE");
 
   var trimUrl = visited.url.match(PPLab.URL_REGEX);
   if (trimUrl == null || trimUrl.length < 2) {
