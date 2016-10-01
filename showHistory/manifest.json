@@ -12,7 +12,7 @@
     "default_icon": "clock.png"
   },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["background.js", "synaptic.js"]
   },
   "manifest_version": 2
 }
