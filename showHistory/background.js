@@ -29,7 +29,7 @@
     return 1;
   };
 
-  function printTopSites(output) { 
+  function printTopSites(output) {
     function getName(index) {
       if(index in PPLab.indexToSite) {
         return PPLab.indexToSite[index];
@@ -66,6 +66,33 @@
       console.log(time + ":");
       printTopSites(PPLab.pp.activate(input));
     });
+  };
+
+  PPLab.currentState = function () {
+    var RECENTS = 5;
+    chrome.history.search({
+        'text': '',
+        'maxResults': RECENTS
+      }, 
+      function gotLatestSite(historyItems) {
+        if (historyItems.length < RECENTS) {
+          return;
+        }
+
+        console.log("Current normalized interval: " + PPLab.normalizeInterval(historyItems[0].lastVisitTime, Date.now()));
+
+        console.log("Recent site : pre-empting normalized time")
+        for(var i = 0; i < RECENTS-1; i++) {
+          var url = 'error';
+          var trimUrl = historyItems[i].url.match(PPLab.URL_REGEX);
+          if (trimUrl != null && trimUrl.length >= 2) {
+            url = trimUrl[1];
+          }
+
+          console.log(url + " : " + PPLab.normalizeInterval(historyItems[i+1].lastVisitTime, historyItems[i].lastVisitTime));
+        }
+      }
+    );
   };
 })();
 
