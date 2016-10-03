@@ -114,6 +114,7 @@ function trainFromHistory() {
         if (trimUrl != null && trimUrl.length > 1) {
           site.name = trimUrl[1];
           site.time = val.lastVisitTime;
+          site.typedCount = val.typedCount;
         }
         return site;
       });
@@ -123,7 +124,7 @@ function trainFromHistory() {
       mappedHistory.forEach(function (site) {
         if(site.name in sites) {
           sites[site.name].count++;
-        } else {
+        } else if (site.typedCount != 0) {
           sites[site.name] = {};
           sites[site.name].name = site.name;
           sites[site.name].count = 1;
@@ -154,8 +155,8 @@ function trainFromHistory() {
         indexToSite[index] = site;
       });
 
-      // console.log("trackedSites");
-      // console.log(trackedSites);
+      console.log("trackedSites");
+      console.log(trackedSites);
 
       // turn history into training data
       // recent websites come before older ones
@@ -218,20 +219,40 @@ function trainFromHistory() {
 
 function trainNewSite(newSite) {
   console.log("training new visit...");
+  // Issue with chrome history: Sites that were typed sometimes have a typedCount of 0
+  console.log(newSite);
+  if (newSite.typedCount == 0) {
+    return;
+  }
 
   // Get the latest site visited before this
   // TODO: Fix this so that we can get the last two 'typed' sites
+  var currDate = new Date();
+  currDate.setHours(currDate.getHours() - 1);
+
+  var currTime = (new Date).getTime();
+  var hourAgo = currDate.getTime();
+
   chrome.history.search({
       'text': '',
-      'maxResults': 2
+      'startTime': hourAgo,
+      'endTime': currTime
     }, 
     function gotLatestSite(historyItems) {
-      if (historyItems.length < 2) {
-        return;
+      // console.log(historyItems);
+      var recentSites = [];
+
+      for (var i in historyItems) {
+        if (historyItems[i].typedCount > 0 && recentSites.length < 2) {
+          recentSites.push(historyItems[i]);
+        }
       }
+
+      console.log(recentSites);
+
       var recentSite = {};
-      recentSite.name = historyItems[1].url;
-      recentSite.time = historyItems[1].lastVisitTime;
+      recentSite.name = recentSites[1].url;
+      recentSite.time = recentSites[1].lastVisitTime;
       
       // OTHER by default
       var thisIndex = 0;
@@ -272,19 +293,101 @@ chrome.runtime.onInstalled.addListener(function(details){
   trainFromHistory();
 });
 
+chrome.tabs.onCreated.addListener(function newTab(tab) {
+  var currDate = new Date();
+  currDate.setHours(currDate.getHours() - 1);
+
+  var currTime = (new Date).getTime();
+  var hourAgo = currDate.getTime();
+
+  chrome.storage.local.get('pagePredictorS2I', function (s2i){
+    chrome.storage.local.get('pagePredictorI2S', function (i2s){
+      PPLab.siteToIndex = s2i['pagePredictorS2I'];
+      PPLab.indexToSite = i2s['pagePredictorI2S'];
+    });
+  });
+
+  chrome.history.search({
+      'text': '',
+      'startTime': hourAgo,
+      'endTime': currTime
+    }, 
+    function gotLatestSite(historyItems) {
+      var tabURL;
+      for (var i in historyItems) {
+        if (historyItems[i].typedCount > 0) {
+          tabURL = historyItems[i].url;
+          break;
+        }
+      }
+
+      var tabUrlTrim = tabURL.match(PPLab.URL_REGEX);
+      var tabURLIndex = PPLab.siteToIndex[tabUrlTrim];
+      var maxProb = 0.5;
+      var maxURL = "";
+      var input = new Array(PPLab.INPUT_SIZE).fill(0);
+
+      input[tabURLIndex] = 1;
+      // test for different possible time intervals
+      // within a minute, 5 mins, 10 mins, 30, and 1 hour+
+      var times = [parseFloat(0.01), parseFloat(0.08), parseFloat(0.17), parseFloat(0.5), parseFloat(0.1)];
+      times.forEach(function (time) {
+        input[input.length-1] = time;
+        output = PPLab.pp.activate(input);
+
+        // store original indices
+        var indexedOutput = [];
+        output.forEach(function(val, index) {
+          indexedOutput.push({
+            index: index,
+            value: val
+          });
+        });
+        indexedOutput.sort(function (a, b) {
+            return b.value - a.value;
+        });
+
+        for(var i = 0; i < 3; i++) {
+          if (parseFloat(indexedOutput[i].value).toFixed(4) > maxProb) {
+            maxProb = parseFloat(indexedOutput[i].value).toFixed(4);
+            maxURL = PPLab.indexToSite[indexedOutput[i].index];
+          }
+        }
+      });
+
+      if (maxURL == "OTHER" || maxURL == "") {
+        return;
+      }
+
+      if (maxURL in PPLab.siteToIndex && maxURL != tabUrlTrim) {
+        // var strWindowFeatures = "location=yes,height=570,width=520,scrollbars=yes,status=yes";
+        // window.open(maxURL, "_blank", strWindowFeatures);
+        // window.location.replace(maxURL);
+        console.log("maxURL: " + maxURL);
+        location.replace("http://www.facebook.com");
+        //return(false);
+      }
+      return;
+    });
+});
+
 chrome.history.onVisited.addListener(function trainURL(visited) {
-  //console.log("VISITED PAGE");
+  // console.log("VISITED PAGE");
 
   var trimUrl = visited.url.match(PPLab.URL_REGEX);
   if (trimUrl == null || trimUrl.length < 2) {
     return;
   }
   var url = trimUrl[1];
-  var thisSite = {};
-  thisSite.name = url;
-  thisSite.time = visited.lastVisitTime;
 
-  if(PPLab.pp) {
+  var thisSite = {
+    'id': visited.id,
+    'name': url,
+    'time': visited.lastVisitTime,
+    'typedCount': visited.typedCount
+  };
+
+  if (PPLab.pp) {
     // already loaded in memory
     trainNewSite(thisSite);
   } else {
